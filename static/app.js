@@ -200,23 +200,25 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-copySnippet.addEventListener("click", async () => {
-  const originalText = copySnippet.textContent;
-  try {
-    const snippetText = "value" in consoleSnippet ? consoleSnippet.value : consoleSnippet.textContent;
-    const copied = await copyText(snippetText.trim());
-    copySnippet.textContent = copied ? "已复制" : "复制失败";
-    copySnippet.classList.toggle("copied", copied);
-  } catch (error) {
-    copySnippet.textContent = "复制失败";
-    copySnippet.classList.remove("copied");
-  }
+if (copySnippet && consoleSnippet) {
+  copySnippet.addEventListener("click", async () => {
+    const originalText = copySnippet.textContent;
+    try {
+      const snippetText = "value" in consoleSnippet ? consoleSnippet.value : consoleSnippet.textContent;
+      const copied = await copyText(snippetText.trim());
+      copySnippet.textContent = copied ? "已复制" : "复制失败";
+      copySnippet.classList.toggle("copied", copied);
+    } catch (error) {
+      copySnippet.textContent = "复制失败";
+      copySnippet.classList.remove("copied");
+    }
 
-  window.setTimeout(() => {
-    copySnippet.textContent = originalText;
-    copySnippet.classList.remove("copied");
-  }, 1400);
-});
+    window.setTimeout(() => {
+      copySnippet.textContent = originalText;
+      copySnippet.classList.remove("copied");
+    }, 1200);
+  });
+}
 
 requestForm.addEventListener("submit", async (event) => {
   event.preventDefault();

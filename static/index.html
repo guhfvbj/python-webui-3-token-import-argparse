@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>网络请求测试</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=help-popup-fix-2" />
   </head>
   <body>
     <div class="liquid-blob-left" aria-hidden="true"></div>
@@ -43,18 +43,18 @@
             <span class="step-index">03</span>
             <div>
               <h3>第三个课程</h3>
-              <p>先打开课程页面，按 F12 进入控制台，粘贴下方代码获取 token。然后把 token、连字符和课程链接拼成一行。</p>
+              <p>先打开课程页面，按 F12 进入控制台，粘贴下面代码获取 token。然后把 token、连字符和课程链接拼成一行。</p>
+              <div class="snippet-card inline-snippet-card">
+                <div class="snippet-toolbar">
+                  <span>控制台代码</span>
+                  <button class="secondary-button copy-button" id="copySnippet" type="button">复制代码</button>
+                </div>
+                <textarea class="snippet-box snippet-textarea" id="consoleSnippet" readonly spellcheck="false">await(async()=>{const t=await new Promise((ok,err)=>{const r=indexedDB.open("localforage");r.onerror=()=>err(r.error);r.onsuccess=()=>{const db=r.result;if(!db.objectStoreNames.contains("keyvaluepairs"))return ok(null);const g=db.transaction("keyvaluepairs","readonly").objectStore("keyvaluepairs").get("home:token");g.onerror=()=>err(g.error);g.onsuccess=()=>ok(g.result||null)}});if(!t){console.error("没有读到 token");return null}let box=document.getElementById("__token_box__");if(!box){box=document.createElement("textarea");box.id="__token_box__";box.style.cssText="position:fixed;z-index:999999;right:20px;top:20px;width:520px;height:160px;padding:12px;font-size:14px;line-height:1.5;background:#fff;color:#000;border:3px solid red;box-shadow:0 0 20px #999;";document.body.appendChild(box)}box.value=t;box.focus();box.select();const copied=document.execCommand("copy");console.log("token =",t);console.log(copied?"已复制 token 到剪贴板":"复制失败，请从页面右上角文本框手动复制");return t})()</textarea>
+              </div>
               <div class="format-line">格式：token-课程链接</div>
               <div class="format-line">示例：你的token-https://higher.smartedu.cn/course/lmc/课程ID</div>
             </div>
           </article>
-
-          <div class="snippet-card">
-            <div class="snippet-toolbar">
-              <button class="secondary-button copy-button" id="copySnippet" type="button">复制代码</button>
-            </div>
-            <textarea class="snippet-box snippet-textarea" id="consoleSnippet" readonly spellcheck="false">await(async()=>{const t=await new Promise((ok,err)=>{const r=indexedDB.open("localforage");r.onerror=()=>err(r.error);r.onsuccess=()=>{const db=r.result;if(!db.objectStoreNames.contains("keyvaluepairs"))return ok(null);const g=db.transaction("keyvaluepairs","readonly").objectStore("keyvaluepairs").get("home:token");g.onerror=()=>err(g.error);g.onsuccess=()=>ok(g.result||null)}});if(!t){console.error("没有读到 token");return null}let box=document.getElementById("__token_box__");if(!box){box=document.createElement("textarea");box.id="__token_box__";box.style.cssText="position:fixed;z-index:999999;right:20px;top:20px;width:520px;height:160px;padding:12px;font-size:14px;line-height:1.5;background:#fff;color:#000;border:3px solid red;box-shadow:0 0 20px #999;";document.body.appendChild(box)}box.value=t;box.focus();box.select();const copied=document.execCommand("copy");console.log("token =",t);console.log(copied?"已复制 token 到剪贴板":"复制失败，请从页面右上角文本框手动复制");return t})()</textarea>
-          </div>
         </div>
       </section>
     </div>
@@ -99,6 +99,6 @@
       </section>
     </main>
 
-    <script src="/app.js"></script>
+    <script src="/app.js?v=help-popup-fix-2"></script>
   </body>
 </html>
