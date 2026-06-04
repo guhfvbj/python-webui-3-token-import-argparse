@@ -445,6 +445,9 @@ input:focus {
   display: grid;
   grid-template-rows: auto 1fr;
   pointer-events: auto;
+  background: #fff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   animation: zoom-in-effect 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -474,9 +477,9 @@ input:focus {
 
 .help-step,
 .snippet-card {
-  border: 1px solid rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(28, 28, 30, 0.08);
   border-radius: var(--radius-inner);
-  background: rgba(255, 255, 255, 0.38);
+  background: #fff;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35);
 }
 
@@ -557,11 +560,18 @@ input:focus {
 }
 
 .snippet-box {
+  display: block;
+  width: 100%;
+  min-height: 220px;
   max-height: 220px;
   margin: 0;
   padding: 18px;
   overflow: auto;
-  background: rgba(0, 0, 0, 0.88);
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  resize: none;
+  background: #111;
   color: #f2f2f7;
   font-family: var(--font-mono);
   font-size: 12px;

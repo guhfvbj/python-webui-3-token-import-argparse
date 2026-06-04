@@ -3,7 +3,7 @@ const openHelp = document.getElementById("openHelp");
 const closeHelp = document.getElementById("closeHelp");
 const copySnippet = document.getElementById("copySnippet");
 const consoleSnippet = document.getElementById("consoleSnippet");
-const CONSOLE_SNIPPET_TEXT = `await(async()=>{const t=await new Promise((ok,err)=>{const r=indexedDB.open("localforage");r.onerror=()=>err(r.error);r.onsuccess=()=>{const db=r.result;if(!db.objectStoreNames.contains("keyvaluepairs"))return ok(null);const g=db.transaction("keyvaluepairs","readonly").objectStore("keyvaluepairs").get("home:token");g.onerror=()=>err(g.error);g.onsuccess=()=>ok(g.result||null)}});if(!t){console.error("没有读到 token");return null}let box=document.getElementById("__token_box__");if(!box){box=document.createElement("textarea");box.id="__token_box__";box.style.cssText="position:fixed;z-index:999999;right:20px;top:20px;width:520px;height:160px;padding:12px;font-size:14px;line-height:1.5;background:#fff;color:#000;border:3px solid red;box-shadow:0 0 20px #999;";document.body.appendChild(box)}box.value=t;box.focus();box.select();const copied=document.execCommand("copy");console.log("token =",t);console.log(copied?"已复制 token 到剪贴板":"复制失败，请从页面右上角文本框手动复制");return t})()`;
+const CONSOLE_SNIPPET_TEXT = String.raw`await(async()=>{const t=await new Promise((ok,err)=>{const r=indexedDB.open("localforage");r.onerror=()=>err(r.error);r.onsuccess=()=>{const db=r.result;if(!db.objectStoreNames.contains("keyvaluepairs"))return ok(null);const g=db.transaction("keyvaluepairs","readonly").objectStore("keyvaluepairs").get("home:token");g.onerror=()=>err(g.error);g.onsuccess=()=>ok(g.result||null)}});if(!t){console.error("没有读到 token");return null}let box=document.getElementById("__token_box__");if(!box){box=document.createElement("textarea");box.id="__token_box__";box.style.cssText="position:fixed;z-index:999999;right:20px;top:20px;width:520px;height:160px;padding:12px;font-size:14px;line-height:1.5;background:#fff;color:#000;border:3px solid red;box-shadow:0 0 20px #999;";document.body.appendChild(box)}box.value=t;box.focus();box.select();const copied=document.execCommand("copy");console.log("token =",t);console.log(copied?"已复制 token 到剪贴板":"复制失败，请从页面右上角文本框手动复制");return t})()`;
 const requestForm = document.getElementById("requestForm");
 const runButton = document.getElementById("runButton");
 const logBox = document.getElementById("logBox");
@@ -15,6 +15,9 @@ let pollTimer = null;
 let activeJobId = "";
 
 if (consoleSnippet) {
+  if ("value" in consoleSnippet) {
+    consoleSnippet.value = CONSOLE_SNIPPET_TEXT;
+  }
   consoleSnippet.textContent = CONSOLE_SNIPPET_TEXT;
 }
 
@@ -200,7 +203,8 @@ document.addEventListener("keydown", (event) => {
 copySnippet.addEventListener("click", async () => {
   const originalText = copySnippet.textContent;
   try {
-    const copied = await copyText(consoleSnippet.textContent.trim());
+    const snippetText = "value" in consoleSnippet ? consoleSnippet.value : consoleSnippet.textContent;
+    const copied = await copyText(snippetText.trim());
     copySnippet.textContent = copied ? "已复制" : "复制失败";
     copySnippet.classList.toggle("copied", copied);
   } catch (error) {
