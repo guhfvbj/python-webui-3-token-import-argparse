@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>网络请求测试</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="liquid-blob-left" aria-hidden="true"></div>
+    <div class="liquid-blob-right" aria-hidden="true"></div>
+
+    <div class="help-modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <section class="help-panel">
+        <div class="help-header">
+          <div>
+            <p class="eyebrow">Quick Guide</p>
+            <h2 id="helpTitle">帮助文档</h2>
+          </div>
+          <button class="icon-button" id="closeHelp" type="button" aria-label="关闭帮助">×</button>
+        </div>
+
+        <div class="help-content">
+          <article class="help-step">
+            <span class="step-index">01</span>
+            <div>
+              <h3>第一个课程</h3>
+              <p>在课程页面复制浏览器地址栏中的完整链接，粘贴到主界面输入框。</p>
+              <div class="format-line">示例：https://service.icourses.cn/resCourse/web/multi-level?token=你的token</div>
+            </div>
+          </article>
+
+          <article class="help-step">
+            <span class="step-index">02</span>
+            <div>
+              <h3>第二个课程</h3>
+              <p>处理方式相同：复制带有 token 参数的课程链接，按行粘贴即可。</p>
+              <div class="format-line">示例：https://service.icourses.cn/resCourse/web/multi-level?token=你的token</div>
+            </div>
+          </article>
+
+          <article class="help-step help-step-wide">
+            <span class="step-index">03</span>
+            <div>
+              <h3>第三个课程</h3>
+              <p>先打开课程页面，按 F12 进入控制台，粘贴下方代码获取 token。然后把 token、连字符和课程链接拼成一行。</p>
+              <div class="format-line">格式：token-课程链接</div>
+              <div class="format-line">示例：你的token-https://higher.smartedu.cn/course/lmc/课程ID</div>
+            </div>
+          </article>
+
+          <div class="snippet-card">
+            <div class="snippet-toolbar">
+              <button class="secondary-button copy-button" id="copySnippet" type="button">复制代码</button>
+            </div>
+            <pre class="snippet-box"><code id="consoleSnippet">await(async()=>{const t=await new Promise((ok,err)=>{const r=indexedDB.open("localforage");r.onerror=()=>err(r.error);r.onsuccess=()=>{const db=r.result;if(!db.objectStoreNames.contains("keyvaluepairs"))return ok(null);const g=db.transaction("keyvaluepairs","readonly").objectStore("keyvaluepairs").get("home:token");g.onerror=()=>err(g.error);g.onsuccess=()=>ok(g.result||null)}});if(!t){console.error("没有读到 token");return null}let box=document.getElementById("__token_box__");if(!box){box=document.createElement("textarea");box.id="__token_box__";box.style.cssText="position:fixed;z-index:999999;right:20px;top:20px;width:520px;height:160px;padding:12px;font-size:14px;line-height:1.5;background:#fff;color:#000;border:3px solid red;box-shadow:0 0 20px #999;";document.body.appendChild(box)}box.value=t;box.focus();box.select();const copied=document.execCommand("copy");console.log("token =",t);console.log(copied?"已复制 token 到剪贴板":"复制失败，请从页面右上角文本框手动复制");return t})()</code></pre>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Request Console</p>
+          <h1>网络请求测试</h1>
+        </div>
+        <div class="topbar-actions">
+          <button class="ghost-button" id="openHelp" type="button">帮助</button>
+          <div class="status-pill" id="statusPill">待运行</div>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <form class="input-panel" id="requestForm">
+          <label class="field">
+            <span>请输入链接</span>
+            <textarea
+              id="tokenOrLink"
+              name="tokenOrLink"
+              rows="7"
+              placeholder="每行一个链接：&#10;https://service.icourses.cn/resCourse/web/multi-level?token=xxx&#10;或 token-https://higher.smartedu.cn/course/lmc/课程ID&#10;不支持单独输入 token"
+            ></textarea>
+          </label>
+
+          <button class="primary-button start-button" id="runButton" type="submit">开始</button>
+        </form>
+
+        <section class="result-panel" aria-live="polite">
+          <div class="result-header">
+            <h2>结果</h2>
+          </div>
+          <div class="summary-grid" id="summaryGrid">
+            <div><span>成功</span><strong>-</strong></div>
+            <div><span>失败</span><strong>-</strong></div>
+          </div>
+          <pre class="log-box" id="logBox">等待提交...</pre>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
