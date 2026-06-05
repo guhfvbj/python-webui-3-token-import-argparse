@@ -1,12 +1,15 @@
 const helpModal = document.getElementById("helpModal");
+const helpBackdrop = document.getElementById("helpBackdrop");
 const openHelp = document.getElementById("openHelp");
 const closeHelp = document.getElementById("closeHelp");
 const copySnippet = document.getElementById("copySnippet");
 const consoleSnippet = document.getElementById("consoleSnippet");
+const confettiCanvas = document.getElementById("confettiCanvas");
 const CONSOLE_SNIPPET_TEXT = String.raw`await(async()=>{const t=await new Promise((ok,err)=>{const r=indexedDB.open("localforage");r.onerror=()=>err(r.error);r.onsuccess=()=>{const db=r.result;if(!db.objectStoreNames.contains("keyvaluepairs"))return ok(null);const g=db.transaction("keyvaluepairs","readonly").objectStore("keyvaluepairs").get("home:token");g.onerror=()=>err(g.error);g.onsuccess=()=>ok(g.result||null)}});if(!t){console.error("没有读到 token");return null}let box=document.getElementById("__token_box__");if(!box){box=document.createElement("textarea");box.id="__token_box__";box.style.cssText="position:fixed;z-index:999999;right:20px;top:20px;width:520px;height:160px;padding:12px;font-size:14px;line-height:1.5;background:#fff;color:#000;border:3px solid red;box-shadow:0 0 20px #999;";document.body.appendChild(box)}box.value=t;box.focus();box.select();const copied=document.execCommand("copy");console.log("token =",t);console.log(copied?"已复制 token 到剪贴板":"复制失败，请从页面右上角文本框手动复制");return t})()`;
 const requestForm = document.getElementById("requestForm");
 const runButton = document.getElementById("runButton");
 const pauseButton = document.getElementById("pauseButton");
+const pauseButtonLabel = pauseButton ? pauseButton.querySelector("span") : null;
 const logBox = document.getElementById("logBox");
 const statusPill = document.getElementById("statusPill");
 const summaryGrid = document.getElementById("summaryGrid");
@@ -14,6 +17,97 @@ const CLIENT_ID_KEY = "requestTesterClientId";
 let pollTimer = null;
 let activeJobId = "";
 let activeJobTarget = "";
+let lastRunPointer = null;
+
+const confetti = (() => {
+  if (!confettiCanvas) return null;
+  const context = confettiCanvas.getContext("2d");
+  if (!context) return null;
+
+  const colors = ["#1a73e8", "#ea4335", "#fbbc04", "#4285f4"];
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let particles = [];
+  let animationId = 0;
+
+  function resize() {
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    confettiCanvas.width = Math.floor(window.innerWidth * dpr);
+    confettiCanvas.height = Math.floor(window.innerHeight * dpr);
+    confettiCanvas.style.width = `${window.innerWidth}px`;
+    confettiCanvas.style.height = `${window.innerHeight}px`;
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function makeParticle(x, y) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 3.3 + 1.4;
+    return {
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1.5,
+      size: Math.random() * 5 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      opacity: 1,
+      rotation: Math.random() * Math.PI,
+      spin: Math.random() * 0.16 - 0.08,
+      gravity: 0.075,
+      friction: 0.965,
+      shape: Math.random() > 0.72 ? "circle" : "rect",
+    };
+  }
+
+  function drawParticle(particle) {
+    context.save();
+    context.globalAlpha = Math.max(0, particle.opacity);
+    context.translate(particle.x, particle.y);
+    context.rotate(particle.rotation);
+    context.fillStyle = particle.color;
+    if (particle.shape === "circle") {
+      context.beginPath();
+      context.arc(0, 0, particle.size * 0.42, 0, Math.PI * 2);
+      context.fill();
+    } else {
+      context.fillRect(-particle.size / 2, -particle.size / 2, particle.size * 1.35, particle.size * 0.72);
+    }
+    context.restore();
+  }
+
+  function tick() {
+    context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    particles = particles.filter((particle) => particle.opacity > 0 && particle.y < window.innerHeight + 80);
+    for (const particle of particles) {
+      particle.vx *= particle.friction;
+      particle.vy *= particle.friction;
+      particle.vy += particle.gravity;
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+      particle.rotation += particle.spin;
+      particle.opacity -= 0.012;
+      drawParticle(particle);
+    }
+    if (particles.length) {
+      animationId = window.requestAnimationFrame(tick);
+    } else {
+      animationId = 0;
+    }
+  }
+
+  function burst(x, y) {
+    if (prefersReducedMotion.matches) return;
+    resize();
+    for (let i = 0; i < 72; i += 1) {
+      particles.push(makeParticle(x, y));
+    }
+    if (!animationId) {
+      animationId = window.requestAnimationFrame(tick);
+    }
+  }
+
+  resize();
+  window.addEventListener("resize", resize);
+  return { burst };
+})();
 
 if (consoleSnippet) {
   if ("value" in consoleSnippet) {
@@ -40,11 +134,19 @@ function getClientId() {
 }
 
 function openHelpModal() {
+  if (!helpModal) return;
   helpModal.classList.remove("hidden");
+  helpBackdrop?.classList.remove("hidden");
+  document.body.classList.add("help-open");
+  openHelp?.setAttribute("aria-expanded", "true");
 }
 
 function closeHelpModal() {
+  if (!helpModal) return;
   helpModal.classList.add("hidden");
+  helpBackdrop?.classList.add("hidden");
+  document.body.classList.remove("help-open");
+  openHelp?.setAttribute("aria-expanded", "false");
 }
 
 async function copyText(text) {
@@ -118,7 +220,12 @@ function updatePauseButton(job) {
   if (!pauseButton) return;
   const enabled = canPauseJob(job);
   pauseButton.disabled = !enabled;
-  pauseButton.textContent = job && job.status === "pause_requested" ? "停止中" : "停止";
+  const label = job && job.status === "pause_requested" ? "停止中" : "停止";
+  if (pauseButtonLabel) {
+    pauseButtonLabel.textContent = label;
+  } else {
+    pauseButton.textContent = label;
+  }
 }
 
 function renderJob(job, mode) {
@@ -193,14 +300,19 @@ function validate(payload) {
   return "";
 }
 
-openHelp.addEventListener("click", openHelpModal);
-closeHelp.addEventListener("click", closeHelpModal);
-helpModal.addEventListener("click", (event) => {
-  if (event.target === helpModal) closeHelpModal();
+openHelp?.addEventListener("click", () => {
+  if (!helpModal) return;
+  if (helpModal.classList.contains("hidden")) {
+    openHelpModal();
+  } else {
+    closeHelpModal();
+  }
 });
+closeHelp?.addEventListener("click", closeHelpModal);
+helpBackdrop?.addEventListener("click", closeHelpModal);
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !helpModal.classList.contains("hidden")) {
+  if (event.key === "Escape" && helpModal && !helpModal.classList.contains("hidden")) {
     closeHelpModal();
   }
 });
@@ -233,7 +345,11 @@ if (pauseButton) {
     }
 
     pauseButton.disabled = true;
-    pauseButton.textContent = "停止中";
+    if (pauseButtonLabel) {
+      pauseButtonLabel.textContent = "停止中";
+    } else {
+      pauseButton.textContent = "停止中";
+    }
     appendLogLine("[STOP] 正在发送停止请求...");
 
     try {
@@ -255,8 +371,20 @@ if (pauseButton) {
   });
 }
 
+if (runButton) {
+  runButton.addEventListener("pointerdown", (event) => {
+    lastRunPointer = { x: event.clientX, y: event.clientY };
+  });
+}
+
 requestForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const buttonRect = runButton.getBoundingClientRect();
+  const burstX = lastRunPointer ? lastRunPointer.x : buttonRect.left + buttonRect.width / 2;
+  const burstY = lastRunPointer ? lastRunPointer.y : buttonRect.top + buttonRect.height / 2;
+  confetti?.burst(burstX, burstY);
+  lastRunPointer = null;
+
   const payload = readForm();
   const validationMessage = validate(payload);
   if (validationMessage) {
