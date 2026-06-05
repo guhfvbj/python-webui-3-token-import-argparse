@@ -32,7 +32,8 @@ http://127.0.0.1:8765
 - 例如：`eyJ...281Z7mwZE1njOKXUMqlnOX-https://higher.smartedu.cn/course/lmc/67da63c02f4f1bef26a7e76a`
 - 第二种任务由 `smartedu_core.py` 执行，会按课程视频逐个串行上报学习记录
 - AES Key 不在前台输入，后端使用内置测试占位值；也可以用环境变量 `REQUEST_TESTER_AES_KEY` 或 `AES_KEY` 覆盖
-- 链接只用于提取 token；后端请求地址默认复用 `core.py` 里的 `DEFAULT_BASE_URL`
+- 第一门/第二门课程链接会用于判断课程页面类型：`multi-level` 使用分章详情接口，`lecture` 使用无分章详情接口
+- 后端请求地址默认复用 `core.py` 里的 `DEFAULT_BASE_URL`
 - 当前默认请求地址：`https://www.icourses.cn/higher_smartedu/course`
 - 如需临时覆盖后端请求地址，可以用环境变量 `REQUEST_TESTER_BASE_URL`
 - 第二种任务会拆出 `token` 和 `/course/lmc/<id>` 里的课程 id，后续由 `smartedu_core.py` 处理

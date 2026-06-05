@@ -12,6 +12,8 @@ DEFAULT_CONCURRENCY = 5
 DEFAULT_SLEEP = 0.2
 DEFAULT_BASE_URL = "https://www.icourses.cn/higher_smartedu/course"
 DEFAULT_AES_KEY = "b7iPrEmYC8AWPGsAH6VBiA=="
+DETAIL_ENDPOINT_HIERARCHICAL = "/smartHigerEdu/hierarchicalCourseDetail"
+DETAIL_ENDPOINT_LECTURE = "/smartHigerEdu/lectureCourseDetail"
 
 VIDEO_TYPE_VALUES = {"1", "video", "VIDEO", "mp4", "MP4", "vod", "VOD"}
 RESOURCE_LIST_KEYS = (
@@ -121,6 +123,9 @@ def normalize_base_url(value: str) -> str:
     if not parsed.scheme or not parsed.netloc:
         raise ValueError("Invalid URL. Example: https://www.example.com/api/course")
 
+    if parsed.netloc.lower() == "service.icourses.cn" and (parsed.path or "").startswith("/resCourse/"):
+        return DEFAULT_BASE_URL
+
     path = (parsed.path or "").rstrip("/")
     marker = "/api/course"
     marker_index = path.find(marker)
@@ -130,6 +135,13 @@ def normalize_base_url(value: str) -> str:
         path = marker
 
     return urlunparse((parsed.scheme, parsed.netloc, path, "", "", "")).rstrip("/")
+
+
+def detail_endpoint_from_link(link: str) -> tuple[str, str]:
+    path = (urlparse(link or "").path or "").lower()
+    if path.endswith("/lecture") or "/lecture/" in path:
+        return DETAIL_ENDPOINT_LECTURE, "lecture"
+    return DETAIL_ENDPOINT_HIERARCHICAL, "multi-level"
 
 
 def _origin(base_url: str) -> str:
@@ -307,8 +319,8 @@ def extract_videos_from_course_data(course_data: dict[str, Any]) -> list[dict[st
     return videos
 
 
-def collect_videos(session, base_url: str):
-    detail_url = f"{base_url}/smartHigerEdu/hierarchicalCourseDetail"
+def collect_videos(session, base_url: str, detail_endpoint: str = DETAIL_ENDPOINT_HIERARCHICAL):
+    detail_url = f"{base_url}{detail_endpoint}"
     course_data = api_get_json(session, detail_url)
 
     course_name = course_data.get("courseName", "")
@@ -365,13 +377,15 @@ def run_job(
     started_at = time.time()
     try:
         base_url = normalize_base_url(link)
+        detail_endpoint, course_page_type = detail_endpoint_from_link(link)
         concurrency = max(1, int(concurrency or DEFAULT_CONCURRENCY))
         sleep_seconds = max(0.0, float(sleep_seconds or 0))
 
         log(f"[BASE_URL] {base_url}")
+        log(f"[COURSE_PAGE] {course_page_type}")
         log("[FETCHING_VIDEO_LIST]")
         session = build_session(token, base_url)
-        course_name, course_school, videos = collect_videos(session, base_url)
+        course_name, course_school, videos = collect_videos(session, base_url, detail_endpoint)
         log(f"[COURSE] {course_name} ({course_school})")
         log(f"[TOTAL_VIDEOS] {len(videos)}")
 

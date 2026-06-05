@@ -171,7 +171,7 @@ def run_token_entries(
         else:
             result = run_job(
                 token=entry.token,
-                link=base_url,
+                link=entry.url or base_url,
                 aes_key=aes_key,
                 concurrency=concurrency,
                 sleep_seconds=sleep_seconds,
