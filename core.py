@@ -13,13 +13,74 @@ DEFAULT_SLEEP = 0.2
 DEFAULT_BASE_URL = "https://www.icourses.cn/higher_smartedu/course"
 DEFAULT_AES_KEY = "b7iPrEmYC8AWPGsAH6VBiA=="
 
-VIDEO_TYPE_VALUES = {"1", "video", "VIDEO"}
-RESOURCE_LIST_KEYS = ("resList", "resourceList", "resources", "videoList", "reses")
-CHILDREN_KEYS = ("chapterResTree", "children", "childList", "chapterList", "nodes", "subList")
-RESOURCE_ID_KEYS = ("id", "resId", "resourceId", "res_id")
-RESOURCE_TITLE_KEYS = ("resTitle", "title", "resourceName", "resName", "name")
+VIDEO_TYPE_VALUES = {"1", "video", "VIDEO", "mp4", "MP4", "vod", "VOD"}
+RESOURCE_LIST_KEYS = (
+    "resList",
+    "resourceList",
+    "resources",
+    "videoList",
+    "reses",
+    "courseResList",
+    "courseResourceList",
+    "resourceInfoList",
+    "resInfoList",
+    "lessonList",
+    "coursewareList",
+    "items",
+    "records",
+    "list",
+)
+CHILDREN_KEYS = (
+    "chapterResTree",
+    "children",
+    "childList",
+    "chapterList",
+    "chapters",
+    "nodes",
+    "subList",
+    "catalogList",
+    "directoryList",
+    "unitList",
+)
+RESOURCE_ID_KEYS = (
+    "id",
+    "resId",
+    "resID",
+    "resourceId",
+    "resourceID",
+    "res_id",
+    "resource_id",
+    "videoId",
+    "videoID",
+    "video_id",
+    "videoResourceId",
+)
+RESOURCE_EXPLICIT_TITLE_KEYS = (
+    "resTitle",
+    "resourceTitle",
+    "title",
+    "resourceName",
+    "resName",
+    "videoTitle",
+    "videoName",
+    "fileName",
+    "displayName",
+)
+RESOURCE_TITLE_KEYS = RESOURCE_EXPLICIT_TITLE_KEYS + ("name",)
 RESOURCE_PROGRESS_KEYS = ("progress", "studyProgress", "learningProgress")
-RESOURCE_SECONDS_KEYS = ("videoClassHour", "video_seconds", "duration", "videoDuration")
+RESOURCE_SECONDS_KEYS = (
+    "videoClassHour",
+    "video_seconds",
+    "duration",
+    "videoDuration",
+    "durationSecond",
+    "durationSeconds",
+    "seconds",
+    "videoSeconds",
+    "classHour",
+    "resDuration",
+)
+RESOURCE_MEDIA_KEYS = ("videoUrl", "videoURL", "playUrl", "playURL", "mediaUrl", "mediaURL", "fileUrl", "fileURL")
 
 
 class MissingDependencyError(RuntimeError):
@@ -139,7 +200,26 @@ def _resource_type(resource: dict[str, Any]):
     return _first_value(resource, ("type", "resType", "resourceType", "mediaType"))
 
 
-def _is_video_resource(resource: dict[str, Any]) -> bool:
+def _has_non_empty_key(mapping: dict[str, Any], keys: tuple[str, ...]) -> bool:
+    return _first_value(mapping, keys) is not None
+
+
+def _has_nested_collection(mapping: dict[str, Any]) -> bool:
+    for key in RESOURCE_LIST_KEYS + CHILDREN_KEYS:
+        value = mapping.get(key)
+        if isinstance(value, list) and value:
+            return True
+    return False
+
+
+def _looks_like_resource_context(parent_key: str | None) -> bool:
+    if not parent_key:
+        return False
+    key = parent_key.lower()
+    return any(marker in key for marker in ("res", "resource", "video", "media", "lesson", "courseware"))
+
+
+def _is_video_resource(resource: dict[str, Any], parent_key: str | None = None) -> bool:
     resource_id = _first_value(resource, RESOURCE_ID_KEYS)
     if resource_id is None:
         return False
@@ -149,7 +229,18 @@ def _is_video_resource(resource: dict[str, Any]) -> bool:
         resource_type_text = str(resource_type).strip()
         return resource_type_text in VIDEO_TYPE_VALUES or resource_type_text.lower() == "video"
 
-    return any(key in resource for key in RESOURCE_SECONDS_KEYS)
+    if _has_non_empty_key(resource, RESOURCE_SECONDS_KEYS) or _has_non_empty_key(resource, RESOURCE_MEDIA_KEYS):
+        return True
+
+    if _has_non_empty_key(resource, RESOURCE_EXPLICIT_TITLE_KEYS):
+        return _looks_like_resource_context(parent_key) or not _has_nested_collection(resource)
+
+    # Some no-chapter course responses use video nodes with only id + name.
+    # Do not apply this fallback to nodes that still look like chapter containers.
+    if resource.get("name") and _looks_like_resource_context(parent_key) and not _has_nested_collection(resource):
+        return True
+
+    return False
 
 
 def extract_videos_from_course_data(course_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -176,16 +267,16 @@ def extract_videos_from_course_data(course_data: dict[str, Any]) -> list[dict[st
             }
         )
 
-    def walk(value, path: list[str]):
+    def walk(value, path: list[str], parent_key: str | None = None):
         if isinstance(value, list):
             for item in value:
-                walk(item, path)
+                walk(item, path, parent_key)
             return
 
         if not isinstance(value, dict):
             return
 
-        is_video = _is_video_resource(value)
+        is_video = _is_video_resource(value, parent_key)
         if is_video:
             add_video(value, path)
 
@@ -198,13 +289,19 @@ def extract_videos_from_course_data(course_data: dict[str, Any]) -> list[dict[st
             resources = value.get(key)
             if isinstance(resources, list):
                 for resource in resources:
-                    if isinstance(resource, dict) and _is_video_resource(resource):
+                    if isinstance(resource, dict) and _is_video_resource(resource, key):
                         add_video(resource, current_path)
 
         for key in CHILDREN_KEYS:
             children = value.get(key)
             if children:
-                walk(children, current_path)
+                walk(children, current_path, key)
+
+        for key, child_value in value.items():
+            if key in RESOURCE_LIST_KEYS or key in CHILDREN_KEYS:
+                continue
+            if isinstance(child_value, (dict, list)):
+                walk(child_value, current_path, key)
 
     walk(course_data, [])
     return videos
