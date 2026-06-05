@@ -15,6 +15,14 @@ python server.py --host 127.0.0.1 --port 8765
 http://127.0.0.1:8765
 ```
 
+## 部署提示
+
+- 服务默认读取环境变量 `REQUEST_TESTER_HOST`、`REQUEST_TESTER_PORT`
+- 任务数据默认保存在项目内 `server_data/jobs.json`
+- 服务器部署建议设置 `REQUEST_TESTER_DATA_DIR=/var/lib/python-webui-request-tester`
+- `deploy.systemd.service.example` 已包含 `StateDirectory=python-webui-request-tester`，systemd 会为服务用户准备可写数据目录
+- 如果前面有 Nginx/Caddy 反向代理，Python 服务可以继续监听 `127.0.0.1:8765`
+
 ## Web UI 输入
 
 - 输入：每行一个链接；不再支持单独输入 token
@@ -29,8 +37,11 @@ http://127.0.0.1:8765
 - 如需临时覆盖后端请求地址，可以用环境变量 `REQUEST_TESTER_BASE_URL`
 - 第二种任务会拆出 `token` 和 `/course/lmc/<id>` 里的课程 id，后续由 `smartedu_core.py` 处理
 - Web UI 会把任务交给后台线程执行，日志和状态保存到服务器本地 `server_data/jobs.json`
-- 第三种任务运行后，同一设备再次输入相同的课程链接即可查询历史记录和当前进程
-- 前端会在浏览器 `localStorage` 保存设备标识和课程查询缓存；服务器记录不会写入明文 token 日志，只保存脱敏输入预览
+- 第三种任务每次启动都会先向 SmartEdu 服务器查询观看记录，只执行未完成的视频
+- 如果 SmartEdu 服务器显示全部视频已完成，任务会直接输出 `全部课程已观看完毕！`，不会继续上报
+- 第三种任务需要输入 `token-课程链接`；单独输入课程链接无法查询服务器观看状态
+- 第三种任务运行中会启用结果框右上角的 `暂停` 按钮；暂停后再次输入同一 `token-课程链接` 可以重新查询服务器观看状态并继续未完成部分
+- 前端会在浏览器 `localStorage` 保存设备标识；服务器记录不会写入明文 token 日志，只保存脱敏输入预览
 
 ## 链接提取程序
 

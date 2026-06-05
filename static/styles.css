@@ -99,6 +99,13 @@ button {
   gap: 10px;
 }
 
+.page-help-button {
+  position: fixed;
+  top: 24px;
+  right: 32px;
+  z-index: 20;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   color: var(--text-secondary);
@@ -210,7 +217,15 @@ h2 {
   gap: 12px;
 }
 
-.field span {
+.field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 34px;
+}
+
+.field-header span {
   margin-left: 2px;
   color: var(--text-secondary);
   font-size: 13px;
@@ -316,6 +331,16 @@ input:focus {
   padding: 0 12px;
   font-size: 12px;
   font-weight: 600;
+}
+
+.pause-button {
+  min-width: 74px;
+}
+
+.pause-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none !important;
 }
 
 .icon-button {
@@ -432,7 +457,7 @@ input:focus {
   justify-content: flex-end;
   padding: 24px 32px;
   pointer-events: none;
-  background: rgba(242, 242, 247, 0.96);
+  background: transparent;
   animation: fade-in-effect 0.3s ease-out both;
 }
 
@@ -603,11 +628,6 @@ input:focus {
     margin-bottom: 28px;
   }
 
-  .topbar-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
   h1 {
     font-size: 26px;
   }
@@ -633,6 +653,11 @@ input:focus {
 }
 
 @media (max-width: 520px) {
+  .page-help-button {
+    top: 12px;
+    right: 12px;
+  }
+
   .help-modal {
     padding: 12px;
   }

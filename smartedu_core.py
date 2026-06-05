@@ -27,6 +27,10 @@ class MissingDependencyError(RuntimeError):
     pass
 
 
+class PauseRequested(RuntimeError):
+    pass
+
+
 def _load_requests():
     try:
         import requests
@@ -59,6 +63,18 @@ def short_id(value: str | None) -> str:
     if len(text) <= 8:
         return text or "-"
     return text[:8] + "..."
+
+
+def interruptible_sleep(seconds: float, should_pause: Callable[[], bool] | None = None):
+    remaining = max(0.0, float(seconds or 0))
+    while remaining > 0:
+        if should_pause and should_pause():
+            raise PauseRequested("Pause requested.")
+        chunk = min(1.0, remaining)
+        time.sleep(chunk)
+        remaining -= chunk
+    if should_pause and should_pause():
+        raise PauseRequested("Pause requested.")
 
 
 def build_headers(token: str) -> dict:
@@ -224,6 +240,62 @@ def get_existing_record(session, course_id, course_type, term, video_url, log: C
     return None, None, 0.0
 
 
+def is_video_complete(learned_seconds: float, duration_seconds: float) -> bool:
+    if duration_seconds <= 0:
+        return True
+    return float(learned_seconds or 0) >= max(0.0, float(duration_seconds) - 1.0)
+
+
+def collect_video_statuses(session, course_id, course_type, term, videos, log: Callable[[str], None]):
+    statuses = []
+    total_duration = 0.0
+    total_learned = 0.0
+    completed_count = 0
+
+    log("[INFO] 正在从 SmartEdu 服务器查询观看记录...")
+    for index, video in enumerate(videos, start=1):
+        title = video.get("title") or "(untitled)"
+        video_url = video.get("videoUrl") or ""
+        duration = float(video.get("videoDuration") or 0)
+        _, _, learned = get_existing_record(session, course_id, course_type, term, video_url, log)
+        learned = min(float(learned or 0), duration) if duration > 0 else float(learned or 0)
+        complete = is_video_complete(learned, duration)
+
+        total_duration += duration
+        total_learned += learned
+        if complete:
+            completed_count += 1
+
+        status = {
+            "index": index,
+            "title": title,
+            "video_url": video_url,
+            "duration_seconds": duration,
+            "learned_seconds": learned,
+            "duration_hms": hms(duration),
+            "learned_hms": hms(learned),
+            "progress_percent": round(learned / duration * 100, 2) if duration else 100,
+            "complete": complete,
+        }
+        statuses.append(status)
+
+        state = "已完成" if complete else "未完成"
+        log(
+            f"[WATCH_STATUS] {index}/{len(videos)} {state} | {title} | "
+            f"已学 {int(learned)}s({hms(learned)}) / 总长 {int(duration)}s({hms(duration)})"
+        )
+
+    summary = {
+        "video_count": len(videos),
+        "completed_count": completed_count,
+        "unfinished_count": max(0, len(videos) - completed_count),
+        "total_duration_seconds": total_duration,
+        "total_learned_seconds": total_learned,
+        "progress_percent": round(total_learned / total_duration * 100, 2) if total_duration else 100,
+    }
+    return statuses, summary
+
+
 def start_record(session, course_id, course_type, term, video_url, sid):
     body = {
         "courseId": course_id,
@@ -253,10 +325,20 @@ def send_heartbeat(session, record_id, main_id, sid, start_sec, end_sec, term):
     return data
 
 
-def report_video_full(session, video_info, course_id, course_type, term, log: Callable[[str], None]):
+def report_video_full(
+    session,
+    video_info,
+    course_id,
+    course_type,
+    term,
+    log: Callable[[str], None],
+    should_pause: Callable[[], bool] | None = None,
+):
     title = video_info["title"] or "(untitled)"
     video_url = video_info["videoUrl"]
     total_sec = float(video_info["videoDuration"] or 0)
+    if should_pause and should_pause():
+        raise PauseRequested("Pause requested.")
 
     if total_sec <= 0:
         log(f"[{title}] Duration is 0, skipped")
@@ -265,23 +347,23 @@ def report_video_full(session, video_info, course_id, course_type, term, log: Ca
     sid = random_sid()
     started_at = time.time()
     main_id, record_id, curr_time = get_existing_record(session, course_id, course_type, term, video_url, log)
+    current = float(curr_time or 0)
 
-    if main_id and record_id and curr_time >= total_sec:
-        log(f"[{title}] Existing complete record, skipped")
+    if is_video_complete(current, total_sec):
+        log(f"[{title}] Complete record found, skipped")
         return True, title, total_sec, 0.0, "existing complete record"
 
     if not main_id or not record_id:
         try:
             main_id, record_id = start_record(session, course_id, course_type, term, video_url, sid)
             log(f"[{title}] New record created (id={short_id(main_id)}, recordId={short_id(record_id)})")
-            curr_time = 0.0
+            current = max(current, 0.0)
         except Exception as exc:
             log(f"[{title}] start failed: {exc}")
             return False, title, total_sec, time.time() - started_at, f"start failed: {exc}"
     else:
         log(f"[{title}] Reuse record (progress {curr_time}/{total_sec}s)")
 
-    current = float(curr_time or 0)
     segment_count = 0
 
     schedule = [
@@ -293,7 +375,7 @@ def report_video_full(session, video_info, course_id, course_type, term, log: Ca
         for delay, segment in schedule:
             if current >= total_sec:
                 break
-            time.sleep(delay)
+            interruptible_sleep(delay, should_pause)
             end = min(current + segment, total_sec)
             send_heartbeat(session, record_id, main_id, sid, current, end, term)
             segment_count += 1
@@ -301,12 +383,15 @@ def report_video_full(session, video_info, course_id, course_type, term, log: Ca
             current = end
 
         while current < total_sec:
-            time.sleep(SUBSEQUENT_INTERVAL)
+            interruptible_sleep(SUBSEQUENT_INTERVAL, should_pause)
             end = min(current + SUBSEQUENT_SEGMENT, total_sec)
             send_heartbeat(session, record_id, main_id, sid, current, end, term)
             segment_count += 1
             log(f"[{title}] heartbeat #{segment_count}: {current}-{end}s ({end}/{total_sec}s)")
             current = end
+    except PauseRequested:
+        log(f"[{title}] Paused at {current}/{total_sec}s")
+        raise
     except Exception as exc:
         log(f"[{title}] heartbeat failed after {segment_count} segment(s): {exc}")
         return (
@@ -329,6 +414,7 @@ def run_job(
     course_url: str | None = None,
     term: str | None = None,
     logger: Callable[[str], None] | None = None,
+    should_pause: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     logs: list[str] = []
 
@@ -349,6 +435,19 @@ def run_job(
 
         session = build_session(token)
         log(f"[INFO] Course ID: {course_id}, type: {course_type}")
+        if should_pause and should_pause():
+            log("[PAUSED] 已暂停。再次输入同一 token-课程链接并点击开始，会重新查询服务器观看状态后继续未完成部分。")
+            return {
+                "ok": False,
+                "paused": True,
+                "base_url": DEFAULT_PAGE_BASE,
+                "course_id": course_id,
+                "course_type": course_type,
+                "success_count": 0,
+                "fail_count": 0,
+                "elapsed_seconds": round(time.time() - started_at, 2),
+                "logs": logs,
+            }
 
         resolved_term, course_name, videos = get_course_info(session, course_id, course_url, log)
         if term:
@@ -373,6 +472,46 @@ def run_job(
                 "logs": logs,
             }
 
+        video_statuses, watch_summary = collect_video_statuses(
+            session,
+            course_id,
+            course_type,
+            resolved_term,
+            videos,
+            log,
+        )
+        unfinished_videos = [
+            video
+            for video, status in zip(videos, video_statuses)
+            if not status.get("complete")
+        ]
+        log(
+            "[WATCH_SUMMARY] "
+            f"completed={watch_summary['completed_count']}, "
+            f"unfinished={watch_summary['unfinished_count']}, "
+            f"progress={watch_summary['progress_percent']}%"
+        )
+
+        if not unfinished_videos:
+            log("全部课程已观看完毕！")
+            return {
+                "ok": True,
+                "all_watched": True,
+                "base_url": DEFAULT_PAGE_BASE,
+                "course_id": course_id,
+                "course_type": course_type,
+                "course_name": course_name,
+                "term": resolved_term,
+                "video_count": len(videos),
+                "success_count": 0,
+                "fail_count": 0,
+                "watch_summary": watch_summary,
+                "watch_statuses": video_statuses,
+                "elapsed_seconds": round(time.time() - started_at, 2),
+                "logs": logs,
+            }
+
+        log(f"[INFO] 只执行未完成视频：{len(unfinished_videos)}/{len(videos)}")
         log(
             "[INFO] Report rhythm: "
             f"{INITIAL_SEGMENT_1}s->{SECOND_SEGMENT}s->{SUBSEQUENT_SEGMENT}s; "
@@ -383,15 +522,39 @@ def run_job(
         fail_count = 0
         results = []
 
-        for video in videos:
-            ok, title, duration, elapsed, message = report_video_full(
-                session,
-                video,
-                course_id,
-                course_type,
-                resolved_term,
-                log,
-            )
+        for video in unfinished_videos:
+            try:
+                if should_pause and should_pause():
+                    raise PauseRequested("Pause requested.")
+                ok, title, duration, elapsed, message = report_video_full(
+                    session,
+                    video,
+                    course_id,
+                    course_type,
+                    resolved_term,
+                    log,
+                    should_pause=should_pause,
+                )
+            except PauseRequested:
+                log("[PAUSED] 已暂停。再次输入同一 token-课程链接并点击开始，会重新查询服务器观看状态后继续未完成部分。")
+                return {
+                    "ok": False,
+                    "paused": True,
+                    "base_url": DEFAULT_PAGE_BASE,
+                    "course_id": course_id,
+                    "course_type": course_type,
+                    "course_name": course_name,
+                    "term": resolved_term,
+                    "video_count": len(videos),
+                    "unfinished_count": len(unfinished_videos),
+                    "success_count": success_count,
+                    "fail_count": fail_count,
+                    "watch_summary": watch_summary,
+                    "watch_statuses": video_statuses,
+                    "elapsed_seconds": round(time.time() - started_at, 2),
+                    "results": results,
+                    "logs": logs,
+                }
             if ok:
                 success_count += 1
             else:
@@ -416,8 +579,11 @@ def run_job(
             "course_name": course_name,
             "term": resolved_term,
             "video_count": len(videos),
+            "unfinished_count": len(unfinished_videos),
             "success_count": success_count,
             "fail_count": fail_count,
+            "watch_summary": watch_summary,
+            "watch_statuses": video_statuses,
             "elapsed_seconds": round(time.time() - started_at, 2),
             "results": results,
             "logs": logs,

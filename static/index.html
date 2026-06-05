@@ -9,8 +9,9 @@
   <body>
     <div class="liquid-blob-left" aria-hidden="true"></div>
     <div class="liquid-blob-right" aria-hidden="true"></div>
+    <button class="ghost-button page-help-button" id="openHelp" type="button">帮助</button>
 
-    <div class="help-modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="help-modal" id="helpModal" role="dialog" aria-modal="false" aria-labelledby="helpTitle">
       <section class="help-panel">
         <div class="help-header">
           <div>
@@ -46,7 +47,6 @@
               <p>先打开课程页面，按 F12 进入控制台，粘贴下面代码获取 token。然后把 token、连字符和课程链接拼成一行。</p>
               <div class="snippet-card inline-snippet-card">
                 <div class="snippet-toolbar">
-                  <span>控制台代码</span>
                   <button class="secondary-button copy-button" id="copySnippet" type="button">复制代码</button>
                 </div>
                 <textarea class="snippet-box snippet-textarea" id="consoleSnippet" readonly spellcheck="false">await(async()=>{const t=await new Promise((ok,err)=>{const r=indexedDB.open("localforage");r.onerror=()=>err(r.error);r.onsuccess=()=>{const db=r.result;if(!db.objectStoreNames.contains("keyvaluepairs"))return ok(null);const g=db.transaction("keyvaluepairs","readonly").objectStore("keyvaluepairs").get("home:token");g.onerror=()=>err(g.error);g.onsuccess=()=>ok(g.result||null)}});if(!t){console.error("没有读到 token");return null}let box=document.getElementById("__token_box__");if(!box){box=document.createElement("textarea");box.id="__token_box__";box.style.cssText="position:fixed;z-index:999999;right:20px;top:20px;width:520px;height:160px;padding:12px;font-size:14px;line-height:1.5;background:#fff;color:#000;border:3px solid red;box-shadow:0 0 20px #999;";document.body.appendChild(box)}box.value=t;box.focus();box.select();const copied=document.execCommand("copy");console.log("token =",t);console.log(copied?"已复制 token 到剪贴板":"复制失败，请从页面右上角文本框手动复制");return t})()</textarea>
@@ -65,16 +65,15 @@
           <p class="eyebrow">Request Console</p>
           <h1>网络请求测试</h1>
         </div>
-        <div class="topbar-actions">
-          <button class="ghost-button" id="openHelp" type="button">帮助</button>
-          <div class="status-pill" id="statusPill">待运行</div>
-        </div>
       </header>
 
       <section class="workspace">
         <form class="input-panel" id="requestForm">
           <label class="field">
-            <span>请输入链接</span>
+            <div class="field-header">
+              <span>请输入链接</span>
+              <div class="status-pill" id="statusPill">待运行</div>
+            </div>
             <textarea
               id="tokenOrLink"
               name="tokenOrLink"
@@ -89,6 +88,7 @@
         <section class="result-panel" aria-live="polite">
           <div class="result-header">
             <h2>结果</h2>
+            <button class="secondary-button pause-button" id="pauseButton" type="button" disabled>暂停</button>
           </div>
           <div class="summary-grid" id="summaryGrid">
             <div><span>成功</span><strong>-</strong></div>

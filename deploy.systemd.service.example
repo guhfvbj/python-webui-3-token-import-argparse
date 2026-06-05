@@ -10,8 +10,10 @@ WorkingDirectory=/opt/python-webui-3-token-import-argparse
 Environment=PYTHONUNBUFFERED=1
 Environment=REQUEST_TESTER_HOST=127.0.0.1
 Environment=REQUEST_TESTER_PORT=8765
-ExecStart=/opt/python-webui-3-token-import-argparse/.venv/bin/python server.py --host 127.0.0.1 --port 8765
-Restart=always
+Environment=REQUEST_TESTER_DATA_DIR=/var/lib/python-webui-request-tester
+StateDirectory=python-webui-request-tester
+ExecStart=/opt/python-webui-3-token-import-argparse/.venv/bin/python server.py
+Restart=on-failure
 RestartSec=3
 
 [Install]

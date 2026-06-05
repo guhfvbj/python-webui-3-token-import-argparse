@@ -6,13 +6,14 @@ const consoleSnippet = document.getElementById("consoleSnippet");
 const CONSOLE_SNIPPET_TEXT = String.raw`await(async()=>{const t=await new Promise((ok,err)=>{const r=indexedDB.open("localforage");r.onerror=()=>err(r.error);r.onsuccess=()=>{const db=r.result;if(!db.objectStoreNames.contains("keyvaluepairs"))return ok(null);const g=db.transaction("keyvaluepairs","readonly").objectStore("keyvaluepairs").get("home:token");g.onerror=()=>err(g.error);g.onsuccess=()=>ok(g.result||null)}});if(!t){console.error("没有读到 token");return null}let box=document.getElementById("__token_box__");if(!box){box=document.createElement("textarea");box.id="__token_box__";box.style.cssText="position:fixed;z-index:999999;right:20px;top:20px;width:520px;height:160px;padding:12px;font-size:14px;line-height:1.5;background:#fff;color:#000;border:3px solid red;box-shadow:0 0 20px #999;";document.body.appendChild(box)}box.value=t;box.focus();box.select();const copied=document.execCommand("copy");console.log("token =",t);console.log(copied?"已复制 token 到剪贴板":"复制失败，请从页面右上角文本框手动复制");return t})()`;
 const requestForm = document.getElementById("requestForm");
 const runButton = document.getElementById("runButton");
+const pauseButton = document.getElementById("pauseButton");
 const logBox = document.getElementById("logBox");
 const statusPill = document.getElementById("statusPill");
 const summaryGrid = document.getElementById("summaryGrid");
 const CLIENT_ID_KEY = "requestTesterClientId";
-const COURSE_CACHE_KEY = "requestTesterCourseCache";
 let pollTimer = null;
 let activeJobId = "";
+let activeJobTarget = "";
 
 if (consoleSnippet) {
   if ("value" in consoleSnippet) {
@@ -101,31 +102,23 @@ function renderSummary(data) {
 function statusState(status) {
   if (status === "completed") return "success";
   if (status === "failed" || status === "interrupted") return "error";
-  if (status === "queued" || status === "running") return "running";
+  if (status === "queued" || status === "running" || status === "pause_requested") return "running";
   return "";
 }
 
 function isActiveStatus(status) {
-  return status === "queued" || status === "running";
+  return status === "queued" || status === "running" || status === "pause_requested";
 }
 
-function loadCourseCache() {
-  try {
-    return JSON.parse(localStorage.getItem(COURSE_CACHE_KEY) || "{}");
-  } catch (error) {
-    return {};
-  }
+function canPauseJob(job) {
+  return job && job.target === "smartedu_lmc" && (job.status === "queued" || job.status === "running");
 }
 
-function saveCourseCache(job) {
-  if (!job || !job.course_url || !job.id) return;
-  const cache = loadCourseCache();
-  cache[job.course_url] = {
-    job_id: job.id,
-    course_key: job.course_key,
-    updated_at: job.updated_at,
-  };
-  localStorage.setItem(COURSE_CACHE_KEY, JSON.stringify(cache));
+function updatePauseButton(job) {
+  if (!pauseButton) return;
+  const enabled = canPauseJob(job);
+  pauseButton.disabled = !enabled;
+  pauseButton.textContent = job && job.status === "pause_requested" ? "暂停中" : "暂停";
 }
 
 function renderJob(job, mode) {
@@ -141,15 +134,19 @@ function renderJob(job, mode) {
   writeLog(header.concat(logs.length ? logs : ["暂无日志。"]));
   renderSummary(job);
   setStatus(job.status_label || "运行中", statusState(job.status));
-  saveCourseCache(job);
+  activeJobTarget = job.target || "";
+  updatePauseButton(job);
 }
 
-function stopPolling() {
+function stopPolling(clearJob = true) {
   if (pollTimer) {
     window.clearInterval(pollTimer);
     pollTimer = null;
   }
+  if (!clearJob) return;
   activeJobId = "";
+  activeJobTarget = "";
+  updatePauseButton(null);
 }
 
 async function fetchJob(jobId, mode) {
@@ -164,9 +161,10 @@ async function fetchJob(jobId, mode) {
   }
 }
 
-function startPolling(jobId, mode) {
-  stopPolling();
+function startPolling(jobId, mode, target) {
+  stopPolling(false);
   activeJobId = jobId;
+  activeJobTarget = target || "";
   pollTimer = window.setInterval(() => {
     fetchJob(activeJobId, mode).catch((error) => {
       appendLogLine(`[ERROR] ${error.message}`);
@@ -220,6 +218,36 @@ if (copySnippet && consoleSnippet) {
   });
 }
 
+if (pauseButton) {
+  pauseButton.addEventListener("click", async () => {
+    if (!activeJobId || activeJobTarget !== "smartedu_lmc") {
+      appendLogLine("[PAUSE] 当前没有可暂停的第三门课程任务。");
+      return;
+    }
+
+    pauseButton.disabled = true;
+    pauseButton.textContent = "暂停中";
+    appendLogLine("[PAUSE] 正在发送暂停请求...");
+
+    try {
+      const response = await fetch(`/api/jobs/${encodeURIComponent(activeJobId)}/pause`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok || !data.job) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+      renderJob(data.job, "process");
+      if (isActiveStatus(data.job.status)) {
+        startPolling(data.job.id, "process", data.job.target);
+      }
+    } catch (error) {
+      appendLogLine(`[ERROR] ${error.message}`);
+      fetchJob(activeJobId, "process").catch(() => updatePauseButton(null));
+    }
+  });
+}
+
 requestForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const payload = readForm();
@@ -247,7 +275,7 @@ requestForm.addEventListener("submit", async (event) => {
     if (data.job) {
       renderJob(data.job, data.mode);
       if (isActiveStatus(data.job.status)) {
-        startPolling(data.job.id, data.mode);
+        startPolling(data.job.id, data.mode, data.job.target);
       }
       return;
     }
