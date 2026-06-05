@@ -101,7 +101,7 @@ button {
 
 .page-help-button {
   position: fixed;
-  top: 24px;
+  top: 38px;
   right: 32px;
   z-index: 20;
 }
@@ -455,7 +455,7 @@ input:focus {
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
-  padding: 24px 32px;
+  padding: 38px 32px 24px;
   pointer-events: none;
   background: transparent;
   animation: fade-in-effect 0.3s ease-out both;
@@ -654,12 +654,12 @@ input:focus {
 
 @media (max-width: 520px) {
   .page-help-button {
-    top: 12px;
+    top: 20px;
     right: 12px;
   }
 
   .help-modal {
-    padding: 12px;
+    padding: 20px 12px 12px;
   }
 
   .help-panel {
