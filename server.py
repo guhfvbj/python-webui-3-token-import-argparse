@@ -71,8 +71,8 @@ def job_status_label(status: str) -> str:
     return {
         "queued": "排队中",
         "running": "运行中",
-        "pause_requested": "暂停中",
-        "paused": "已暂停",
+        "pause_requested": "停止中",
+        "paused": "已停止",
         "completed": "已完成",
         "failed": "失败",
         "interrupted": "已中断",
@@ -352,7 +352,7 @@ def build_job_from_payload(payload: dict) -> tuple[int, dict]:
         course_url = entries[0].url
         entry_token_hash = token_hash(entries[0].token)
         active_job = (
-            JOB_STORE.find_active_by_course_token(client_id, course_key, entry_token_hash)
+            JOB_STORE.find_active_by_course_token(course_key, entry_token_hash)
             if course_key and entry_token_hash
             else None
         )
@@ -360,7 +360,7 @@ def build_job_from_payload(payload: dict) -> tuple[int, dict]:
             return 200, {
                 "ok": True,
                 "mode": "attached",
-                "message": "这门课程已有运行中的后台任务，已切换到当前进程。",
+                "message": "这门课程已有运行中的后台任务，已载入历史日志并连接当前进程，未创建新任务。",
                 "job": serialize_job(active_job),
             }
 
@@ -399,8 +399,8 @@ class AppHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
-        if path.startswith("/api/jobs/") and path.endswith("/pause"):
-            self._pause_job(path)
+        if path.startswith("/api/jobs/") and (path.endswith("/pause") or path.endswith("/stop")):
+            self._stop_job(path)
             return
         if path not in ("/api/run", "/api/run-stream", "/api/jobs"):
             self._send_json({"ok": False, "error": "Not found"}, status=404)
@@ -508,9 +508,9 @@ class AppHandler(BaseHTTPRequestHandler):
             return
         self._send_json({"ok": True, "job": serialize_job(job)})
 
-    def _pause_job(self, path: str):
+    def _stop_job(self, path: str):
         parts = [part for part in path.split("/") if part]
-        if len(parts) != 4 or parts[0] != "api" or parts[1] != "jobs" or parts[3] != "pause":
+        if len(parts) != 4 or parts[0] != "api" or parts[1] != "jobs" or parts[3] not in {"pause", "stop"}:
             self._send_json({"ok": False, "error": "Not found"}, status=404)
             return
 
@@ -520,14 +520,14 @@ class AppHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": False, "error": "Job not found."}, status=404)
             return
         if job.get("target") != TARGET_SMARTEDU_LMC:
-            self._send_json({"ok": False, "error": "只有第三门课程任务支持暂停。"}, status=400)
+            self._send_json({"ok": False, "error": "只有第三门课程任务支持停止。"}, status=400)
             return
         if job.get("status") not in ("queued", "running", "pause_requested"):
-            self._send_json({"ok": False, "error": "当前任务不在运行中，不能暂停。", "job": serialize_job(job)}, status=400)
+            self._send_json({"ok": False, "error": "当前任务不在运行中，不能停止。", "job": serialize_job(job)}, status=400)
             return
 
-        paused_job = JOB_STORE.request_pause(job_id)
-        self._send_json({"ok": True, "message": "已发送暂停请求。", "job": serialize_job(paused_job)})
+        stopped_job = JOB_STORE.request_stop(job_id)
+        self._send_json({"ok": True, "message": "已发送停止请求。", "job": serialize_job(stopped_job)})
 
     def _serve_static(self, path: str):
         if path in ("", "/"):

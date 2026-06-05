@@ -390,7 +390,7 @@ def report_video_full(
             log(f"[{title}] heartbeat #{segment_count}: {current}-{end}s ({end}/{total_sec}s)")
             current = end
     except PauseRequested:
-        log(f"[{title}] Paused at {current}/{total_sec}s")
+        log(f"[{title}] Stopped at {current}/{total_sec}s")
         raise
     except Exception as exc:
         log(f"[{title}] heartbeat failed after {segment_count} segment(s): {exc}")
@@ -436,7 +436,7 @@ def run_job(
         session = build_session(token)
         log(f"[INFO] Course ID: {course_id}, type: {course_type}")
         if should_pause and should_pause():
-            log("[PAUSED] 已暂停。再次输入同一 token-课程链接并点击开始，会重新查询服务器观看状态后继续未完成部分。")
+            log("[STOPPED] 已停止。再次输入同一 token-课程链接并点击开始，会重新查询服务器观看状态后继续未完成部分。")
             return {
                 "ok": False,
                 "paused": True,
@@ -536,7 +536,7 @@ def run_job(
                     should_pause=should_pause,
                 )
             except PauseRequested:
-                log("[PAUSED] 已暂停。再次输入同一 token-课程链接并点击开始，会重新查询服务器观看状态后继续未完成部分。")
+                log("[STOPPED] 已停止。再次输入同一 token-课程链接并点击开始，会重新查询服务器观看状态后继续未完成部分。")
                 return {
                     "ok": False,
                     "paused": True,

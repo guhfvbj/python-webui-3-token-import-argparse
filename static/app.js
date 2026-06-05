@@ -118,15 +118,22 @@ function updatePauseButton(job) {
   if (!pauseButton) return;
   const enabled = canPauseJob(job);
   pauseButton.disabled = !enabled;
-  pauseButton.textContent = job && job.status === "pause_requested" ? "暂停中" : "暂停";
+  pauseButton.textContent = job && job.status === "pause_requested" ? "停止中" : "停止";
 }
 
 function renderJob(job, mode) {
   const logs = Array.isArray(job.logs) ? job.logs : [];
+  const statusText = job.status_label || job.status || "未知";
+  const leadingLine =
+    mode === "attached"
+      ? "[HISTORY] 已载入历史日志，并连接到正在运行的任务。"
+      : mode === "query"
+        ? "[HISTORY] 已载入历史记录。"
+        : "[PROCESS] 已连接当前任务。";
   const header = [
-    mode === "query" ? "[HISTORY] 已载入历史记录。" : "[PROCESS] 已连接当前任务。",
+    leadingLine,
     `[JOB] id=${job.id}`,
-    `[STATUS] ${job.status_label || job.status}`,
+    `[STATUS] ${statusText}`,
   ];
   if (job.course_url) header.push(`[COURSE] ${job.course_url}`);
   if (job.input_preview) header.push("[INPUT]\n" + job.input_preview);
@@ -221,16 +228,16 @@ if (copySnippet && consoleSnippet) {
 if (pauseButton) {
   pauseButton.addEventListener("click", async () => {
     if (!activeJobId || activeJobTarget !== "smartedu_lmc") {
-      appendLogLine("[PAUSE] 当前没有可暂停的第三门课程任务。");
+      appendLogLine("[STOP] 当前没有可停止的第三门课程任务。");
       return;
     }
 
     pauseButton.disabled = true;
-    pauseButton.textContent = "暂停中";
-    appendLogLine("[PAUSE] 正在发送暂停请求...");
+    pauseButton.textContent = "停止中";
+    appendLogLine("[STOP] 正在发送停止请求...");
 
     try {
-      const response = await fetch(`/api/jobs/${encodeURIComponent(activeJobId)}/pause`, {
+      const response = await fetch(`/api/jobs/${encodeURIComponent(activeJobId)}/stop`, {
         method: "POST",
       });
       const data = await response.json();

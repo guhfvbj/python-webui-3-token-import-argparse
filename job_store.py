@@ -116,7 +116,7 @@ class JobStore:
             self._save_locked()
             return deepcopy(job)
 
-    def request_pause(self, job_id: str) -> dict | None:
+    def request_stop(self, job_id: str) -> dict | None:
         with self.lock:
             job = self.state["jobs"].get(job_id)
             if not job:
@@ -126,9 +126,12 @@ class JobStore:
             if job.get("status") in {"queued", "running"}:
                 job["status"] = "pause_requested"
                 job["updated_at"] = now_iso()
-                job.setdefault("logs", []).append(f"[{now_hms()}] [JOB] 已收到暂停请求，当前任务到达安全点后暂停。")
+                job.setdefault("logs", []).append(f"[{now_hms()}] [JOB] 已收到停止请求，当前任务到达安全点后停止。")
                 self._save_locked()
             return deepcopy(job)
+
+    def request_pause(self, job_id: str) -> dict | None:
+        return self.request_stop(job_id)
 
     def find_latest_by_course(self, client_id: str, course_key: str) -> dict | None:
         with self.lock:
@@ -140,13 +143,12 @@ class JobStore:
             matches.sort(key=lambda job: job.get("updated_at") or job.get("created_at") or "", reverse=True)
             return deepcopy(matches[0]) if matches else None
 
-    def find_active_by_course_token(self, client_id: str, course_key: str, token_hash: str) -> dict | None:
+    def find_active_by_course_token(self, course_key: str, token_hash: str) -> dict | None:
         with self.lock:
             matches = [
                 job
                 for job in self.state["jobs"].values()
-                if job.get("client_id") == client_id
-                and job.get("course_key") == course_key
+                if job.get("course_key") == course_key
                 and job.get("token_hash") == token_hash
                 and job.get("status") in ACTIVE_STATUSES
             ]
